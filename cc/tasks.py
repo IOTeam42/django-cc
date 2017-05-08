@@ -4,8 +4,6 @@ from decimal import Decimal
 from collections import defaultdict
 from http.client import CannotSendRequest
 
-from celery import shared_task
-from celery.utils.log import get_task_logger
 from bitcoinrpc.authproxy import AuthServiceProxy
 
 from django.db import transaction
@@ -15,15 +13,13 @@ from .models import (Wallet, Currency, Transaction, Address,
 from . import settings
 from .signals import post_deposite
 
-logger = get_task_logger(__name__)
 
 
-@shared_task(throws=(socket_error,))
 @transaction.atomic
 def query_transactions(ticker=None):
     if not ticker:
         for c in Currency.objects.all():
-            query_transactions.delay(c.ticker)
+            query_transactions(c.ticker)
         return
 
     currency = Currency.objects.select_for_update().get(ticker=ticker)
@@ -117,7 +113,6 @@ def process_deposite_transaction(txdict, ticker):
     tx.save()
 
 
-@shared_task(throws=(socket_error,))
 @transaction.atomic
 def query_transaction(ticker, txid):
     currency = Currency.objects.select_for_update().get(ticker=ticker)
@@ -137,7 +132,6 @@ def normalise_txifno(data):
     return arr
 
 
-@shared_task()
 def refill_addresses_queue():
     for currency in Currency.objects.all():
         coin = AuthServiceProxy(currency.api_url)
@@ -151,11 +145,10 @@ def refill_addresses_queue():
                     pass
 
 
-@shared_task()
 def process_withdraw_transactions(ticker=None):
     if not ticker:
         for c in Currency.objects.all():
-            process_withdraw_transactions.delay(c.ticker)
+            process_withdraw_transactions(c.ticker)
         return
 
     with transaction.atomic():
